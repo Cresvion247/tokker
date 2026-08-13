@@ -8,19 +8,33 @@ const SpeechRecognition =
 
 const LANG_MAP = { US: "en-US", UK: "en-GB", AUS: "en-AU" };
 
-const SPANISH_SIGNALS = [
-  "digas", "dilo", "suena", "así", "recuerda", "atención", "escucha",
-  "significa", "fíjate", "ejemplo", "español", "decir", "pronuncia",
-  "pronunciación", "sonido", "letra", "palabra", "es decir", "o sea",
-  "se dice", "no se dice", "cómo no", "cómo sí", "mejor dicho", "vamos a",
-];
+// The LLM labels Spanish runs with ⟨es⟩…⟨/es⟩ and English with ⟨en⟩…⟨/en⟩.
+// We split the reply on these tags so each piece is spoken with the matching
+// voice/language, instead of one voice mangling both languages.
+const LANG_TAG = /⟨(en|es)⟩([\s\S]*?)⟨\/\1⟩/g;
 
-function isSpanishChunk(text) {
-  const t = text.toLowerCase();
-  let score = 0;
-  if (/[áéíóúüñ¿¡]/.test(t)) score += 3;
-  for (const s of SPANISH_SIGNALS) if (t.includes(s)) score += 2;
-  return score >= 2;
+function parseSegments(text) {
+  const segments = [];
+  let lastIndex = 0;
+  let match;
+  LANG_TAG.lastIndex = 0;
+  while ((match = LANG_TAG.exec(text))) {
+    if (match.index > lastIndex) {
+      const before = text.slice(lastIndex, match.index).trim();
+      if (before) segments.push({ lang: "en", text: before });
+    }
+    segments.push({ lang: match[1], text: match[2].trim() });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    const rest = text.slice(lastIndex).trim();
+    if (rest) segments.push({ lang: "en", text: rest });
+  }
+  return segments.length ? segments : [{ lang: "en", text: text.trim() }];
+}
+
+function cleanSpoken(text) {
+  return text.replace(/⟨\/?(en|es)⟩/g, "").replace(/\s+/g, " ").trim();
 }
 
 export function useTokkerSession(config) {
@@ -86,6 +100,7 @@ BEHAVIOUR:
 - For recurring (fossilised) errors, suggest an innovative, memorable strategy or mnemonic to help break the habit.
 - When goals or tests come up, give concise, practical, up-to-date exam-preparation advice.
 - Be warm, encouraging and patient. No markdown in your spoken reply. Reply only with what you would say out loud.
+- LANGUAGE TAGGING (mandatory, for the speech engine): Wrap EVERY part of your spoken reply in a language tag so the text-to-speech engine applies the correct pronunciation. Use ⟨en⟩…⟨/en⟩ for English and ⟨es⟩…⟨/es⟩ for Spanish. Put NOTHING outside a tag. Do NOT mix languages inside one tag — wrap each run of one language separately, in speaking order. Crucially, when an English word appears inside a Spanish correction (the target word being demonstrated), wrap that English word in its own ⟨en⟩…⟨/en⟩ tag so it is pronounced in English, not in the Spanish way. Example: ⟨en⟩Good — say it like this:⟨/en⟩ ⟨es⟩No digas «es-tu-di» (suena como es-tu-di); dilo así:⟨/es⟩ ⟨en⟩study⟨/en⟩ ⟨es⟩(suena como es-tu-di). Intenta otra vez.⟨/es⟩ ⟨en⟩Try again when you're ready.⟨/en⟩
 
 You also keep a private machine-readable record of the errors you noticed in the student's LAST message, for tracking and a later takeaway. Classify each error as exactly one of: pronunciation, lexis, syntax, structure, spanglish. Give the original error, the corrected form, and a short mnemonic or tip when useful. For pronunciation errors specifically, also include "wrongPronunciation" (how it sounded / how NOT to say it, as a simple imitative respelling) and "correctPronunciation" (how it SHOULD sound, as a simple imitative respelling) — the same wrong-vs-right demonstration you give in the spoken correction. If the last message had no errors, return an empty errors array.`;
   }, []);
@@ -167,21 +182,36 @@ You also keep a private machine-readable record of the errors you noticed in the
           resolve();
           return;
         }
-        const chunks =
-          text
-            .match(/[^.!?…]+[.!?…]*\s*/g)
-            ?.map((s) => s.trim())
-            .filter(Boolean) || [text];
-        if (!chunks.length) {
+        const c = configRef.current;
+        const rate = c.speechSpeed;
+        const segments = parseSegments(text);
+        const utterances = [];
+        segments.forEach((seg) => {
+          const segLang = seg.lang === "es" ? "es-ES" : LANG_MAP[c.accent];
+          const v = seg.lang === "es" ? pickSpanishVoice() : pickVoice();
+          const pieces =
+            seg.text
+              .match(/[^.!?…]+[.!?…]*\s*/g)
+              ?.map((s) => s.trim())
+              .filter(Boolean) || [seg.text];
+          pieces.forEach((p) => {
+            if (!p) return;
+            const u = new SpeechSynthesisUtterance(p);
+            if (v) u.voice = v;
+            u.lang = segLang;
+            u.rate = rate;
+            u.pitch = 1.0;
+            utterances.push(u);
+          });
+        });
+        if (!utterances.length) {
           resolve();
           return;
         }
-        const c = configRef.current;
-        const rate = c.speechSpeed;
         window.speechSynthesis.cancel();
         speakingRef.current = true;
         setVadState("speaking");
-        let remaining = chunks.length;
+        let remaining = utterances.length;
         const onFinish = () => {
           remaining -= 1;
           if (remaining === 0) {
@@ -189,15 +219,7 @@ You also keep a private machine-readable record of the errors you noticed in the
             resolve();
           }
         };
-        chunks.forEach((chunk) => {
-          const useSpanish = isSpanishChunk(chunk);
-          const v = useSpanish ? pickSpanishVoice() : pickVoice();
-          const lang = useSpanish ? "es-ES" : LANG_MAP[c.accent];
-          const u = new SpeechSynthesisUtterance(chunk);
-          if (v) u.voice = v;
-          u.lang = lang;
-          u.rate = rate;
-          u.pitch = 1.0;
+        utterances.forEach((u) => {
           u.onend = onFinish;
           u.onerror = onFinish;
           window.speechSynthesis.speak(u);
@@ -288,9 +310,10 @@ You also keep a private machine-readable record of the errors you noticed in the
           },
         });
         const reply = (res && res.reply) || "Sorry, could you say that again?";
+        const display = cleanSpoken(reply);
         if (!activeRef.current) return;
-        historyRef.current.push({ role: "assistant", content: reply });
-        addMessage("Tokker", reply);
+        historyRef.current.push({ role: "assistant", content: display });
+        addMessage("Tokker", display);
         recordErrors(res && res.errors);
         await speak(reply);
       } catch (e) {
