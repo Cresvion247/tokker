@@ -71,10 +71,13 @@ export default function Conversation() {
     try {
       const issuesBrief = issues.length
         ? issues
-            .map(
-              (i) =>
-                `- (${i.type}) "${i.error}" -> "${i.correction}" | repeated ${i.count}x${i.mnemonic ? ` | mnemonic: ${i.mnemonic}` : ""}`
-            )
+            .map((i) => {
+              const extras = [];
+              if (i.wrongPronunciation) extras.push(`wrongPronunciation: ${i.wrongPronunciation}`);
+              if (i.correctPronunciation) extras.push(`correctPronunciation: ${i.correctPronunciation}`);
+              if (i.mnemonic) extras.push(`mnemonic: ${i.mnemonic}`);
+              return `- (${i.type}) "${i.error}" -> "${i.correction}" | repeated ${i.count}x${extras.length ? ` | ${extras.join(" | ")}` : ""}`;
+            })
             .join("\n")
         : "- No notable errors detected.";
       const reportPrompt = `You are Tokker, an expert bilingual language coach and exam-preparation specialist. Using the live-tracked error log and the full transcript below, write the student's end-of-session TAKEAWAY report in well-formatted Markdown.

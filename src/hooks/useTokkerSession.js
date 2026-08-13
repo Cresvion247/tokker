@@ -58,12 +58,14 @@ BEHAVIOUR:
 - Speak primarily in English at the learner's CEFR level (${c.cefrLevel}) — natural, never above it.
 - Target accent: ${c.accent} English, with natural idioms and pronunciation for that variety.
 - Keep turns short: 1 to 3 sentences. Balanced turn-taking: respond, ask ONE open question, then yield. Never monologue or list exercises.
-- When the learner makes a Spanglish mistake or an error of pronunciation/lexis/syntax/structure, briefly switch to Spanish to gently correct it, explain the underlying logic, then prompt them to continue in English.
+- When the learner makes an error of lexis, syntax or structure, briefly switch to Spanish to gently correct it, explain the underlying logic, then prompt them to continue in English.
+- PRONUNCIATION is the priority, because most "Spanglish" pronunciation errors come from reading English words with the Spanish alphabet and sounds (and sometimes from reading Spanish words with English sounds). When you hear one, switch to Spanish and demonstrate it concretely: show how it should NOT be pronounced — a Spanish-letter, imitative respelling that captures the wrong sound — and then how it SHOULD be pronounced — an imitative respelling of the correct sound. Use simple phonetic imitation the learner can read aloud, NOT the IPA. Pattern: "No digas «…» (suena como …); dilo así: «…» (suena como …)." Keep it to one or two lines and invite the learner to try again.
+- You have true simultaneous bilingual capacity: you handle English words pronounced the Spanish way AND Spanish words inserted and pronounced the English way. Treat both as the same kind of pronunciation interference and correct them with the same demonstrate-then-model approach.
 - For recurring (fossilised) errors, suggest an innovative, memorable strategy or mnemonic to help break the habit.
 - When goals or tests come up, give concise, practical, up-to-date exam-preparation advice.
 - Be warm, encouraging and patient. No markdown in your spoken reply. Reply only with what you would say out loud.
 
-You also keep a private machine-readable record of the errors you noticed in the student's LAST message, for tracking and a later takeaway. Classify each error as exactly one of: pronunciation, lexis, syntax, structure, spanglish. Give the original error, the corrected form, and a short mnemonic or tip when useful. If the last message had no errors, return an empty errors array.`;
+You also keep a private machine-readable record of the errors you noticed in the student's LAST message, for tracking and a later takeaway. Classify each error as exactly one of: pronunciation, lexis, syntax, structure, spanglish. Give the original error, the corrected form, and a short mnemonic or tip when useful. For pronunciation errors specifically, also include "wrongPronunciation" (how it sounded / how NOT to say it, as a simple imitative respelling) and "correctPronunciation" (how it SHOULD sound, as a simple imitative respelling) — the same wrong-vs-right demonstration you give in the spoken correction. If the last message had no errors, return an empty errors array.`;
   }, []);
 
   const pickVoice = useCallback(() => {
@@ -177,12 +179,16 @@ You also keep a private machine-readable record of the errors you noticed in the
       if (acc[key]) {
         acc[key].count += 1;
         if (e.mnemonic) acc[key].mnemonic = e.mnemonic;
+        if (e.wrongPronunciation) acc[key].wrongPronunciation = e.wrongPronunciation;
+        if (e.correctPronunciation) acc[key].correctPronunciation = e.correctPronunciation;
       } else {
         acc[key] = {
           type: e.type || "other",
           error: e.error,
           correction: e.correction || "",
           mnemonic: e.mnemonic || "",
+          wrongPronunciation: e.wrongPronunciation || "",
+          correctPronunciation: e.correctPronunciation || "",
           count: 1,
         };
       }
@@ -215,6 +221,8 @@ You also keep a private machine-readable record of the errors you noticed in the
                     error: { type: "string" },
                     correction: { type: "string" },
                     mnemonic: { type: "string" },
+                    wrongPronunciation: { type: "string" },
+                    correctPronunciation: { type: "string" },
                   },
                   required: ["type", "error", "correction"],
                 },

@@ -75,6 +75,23 @@ export default function TakeawayPanel({ issues }) {
                           {i.correction}
                         </span>
                       </p>
+                      {i.type === "pronunciation" &&
+                        (i.wrongPronunciation || i.correctPronunciation) && (
+                          <div className="mt-1.5 space-y-0.5 text-xs">
+                            {i.wrongPronunciation && (
+                              <p className="text-rose-500">
+                                <span className="font-medium">Cómo NO:</span>{" "}
+                                {i.wrongPronunciation}
+                              </p>
+                            )}
+                            {i.correctPronunciation && (
+                              <p className="text-emerald-600">
+                                <span className="font-medium">Cómo SÍ:</span>{" "}
+                                {i.correctPronunciation}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       <div className="flex flex-wrap items-center gap-x-2 mt-1 text-xs text-slate-500">
                         <span className="inline-flex items-center gap-1">
                           {i.count > 1 && (
