@@ -5,6 +5,7 @@ import { useTokkerSession } from "@/hooks/useTokkerSession";
 import TalkingAvatar from "@/components/tokker/TalkingAvatar";
 import VadBadge from "@/components/tokker/VadBadge";
 import TranscriptPanel from "@/components/tokker/TranscriptPanel";
+import TakeawayPanel from "@/components/tokker/TakeawayPanel";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,7 @@ export default function Conversation() {
     active,
     error,
     busy,
+    issues,
     supported,
     start,
     stop,
@@ -59,7 +61,6 @@ export default function Conversation() {
     const header =
       `Tokker Session\n` +
       `CEFR: ${config.cefrLevel} | Accent: ${config.accent} | Voice: ${config.gender} | Speed: ${config.speechSpeed}x\n` +
-      `Grammar focus: ${config.grammarPoints.join(", ") || "general fluency"}\n` +
       `${"=".repeat(48)}\n\n`;
     triggerDownload(
       new Blob([header + lines], { type: "text/plain" }),
@@ -68,19 +69,54 @@ export default function Conversation() {
 
     setDownloading(true);
     try {
-      const summaryPrompt = `You are reviewing an English-practice conversation between a Spanish-speaking student and Tokker. In 2-3 friendly sentences in Spanish, summarize what the student practiced, mention one thing they did well, and one small thing to improve. Conversation:\n${lines}`;
+      const issuesBrief = issues.length
+        ? issues
+            .map(
+              (i) =>
+                `- (${i.type}) "${i.error}" -> "${i.correction}" | repeated ${i.count}x${i.mnemonic ? ` | mnemonic: ${i.mnemonic}` : ""}`
+            )
+            .join("\n")
+        : "- No notable errors detected.";
+      const reportPrompt = `You are Tokker, an expert bilingual language coach and exam-preparation specialist. Using the live-tracked error log and the full transcript below, write the student's end-of-session TAKEAWAY report in well-formatted Markdown.
+
+Include:
+1. A warm opening in Spanish.
+2. "Estadísticas" — a compact list of each tracked error: type, the error, the correction, and how many times it recurred (fossilisation risk). Highlight the ones with the highest recurrence.
+3. "Estrategias y mnemonics" — for the most important recurring errors, propose innovative, memorable strategies and mnemonics grounded in proven language-learning techniques (search the web for up-to-date, effective methods).
+4. "Exam preparation" — concise, practical exam-prep advice tailored to CEFR ${config.cefrLevel}, referencing current best practices and specific exams as relevant.
+5. A short, encouraging closing in Spanish.
+
+Tracked errors:
+${issuesBrief}
+
+Transcript:
+${lines}`;
+
       const res = await base44.integrations.Core.InvokeLLM({
-        prompt: summaryPrompt,
+        prompt: reportPrompt,
+        add_context_from_internet: true,
+        model: "gemini_3_flash",
         response_json_schema: {
           type: "object",
-          properties: { summary: { type: "string" } },
-          required: ["summary"],
+          properties: {
+            report_markdown: { type: "string" },
+            audio_summary: { type: "string" },
+          },
+          required: ["report_markdown", "audio_summary"],
         },
       });
-      const summary = res?.summary || "";
-      if (summary) {
+
+      const report = res?.report_markdown || "";
+      const audioSummary = res?.audio_summary || "";
+      if (report) {
+        triggerDownload(
+          new Blob([report], { type: "text/markdown" }),
+          `tokker-takeaway-${Date.now()}.md`
+        );
+      }
+      if (audioSummary) {
         const tts = await base44.integrations.Core.GenerateSpeech({
-          text: summary,
+          text: audioSummary,
           language_code: "es",
         });
         if (tts?.url) {
@@ -97,7 +133,6 @@ export default function Conversation() {
         accent: config.accent,
         gender: config.gender,
         speech_speed: config.speechSpeed,
-        grammar_points: config.grammarPoints,
         turns: messages.length,
         transcript: messages,
       });
@@ -157,6 +192,13 @@ export default function Conversation() {
               <div className="mt-6">
                 <VadBadge vadState={vadState} />
               </div>
+              {active && issues.length > 0 && (
+                <p className="mt-2 text-xs text-slate-500">
+                  {issues.length} issue{issues.length === 1 ? "" : "s"} tracked
+                  {issues.some((i) => i.count > 1) &&
+                    ` · ${issues.filter((i) => i.count > 1).length} repeating`}
+                </p>
+              )}
               {interim && (
                 <p className="mt-4 text-sm text-slate-400 italic text-center max-w-xs">
                   “{interim}…”
@@ -232,6 +274,12 @@ export default function Conversation() {
             </div>
           </div>
         </div>
+
+        {!active && messages.length > 0 && (
+          <div className="mt-5">
+            <TakeawayPanel issues={issues} />
+          </div>
+        )}
       </div>
     </div>
   );

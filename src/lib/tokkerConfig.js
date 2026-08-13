@@ -23,30 +23,12 @@ export const CEFR_DESCRIPTIONS = {
 
 export const SPEED_OPTIONS = [0.75, 0.85, 0.95, 1.0, 1.1, 1.2, 1.25];
 
-export const GRAMMAR_POINTS = [
-  "Present Simple",
-  "Present Continuous",
-  "Past Simple",
-  "Present Perfect",
-  "Future (will / going to)",
-  "Conditionals",
-  "Articles (a / an / the)",
-  "Prepositions",
-  "Modal verbs",
-  "Phrasal verbs",
-  "Word order",
-  "Plurals",
-  "Comparatives & Superlatives",
-  "Question formation",
-  "Pronunciation",
-];
-
 export function greetingFor(level) {
   if (level === "A1" || level === "A2")
-    return "Hello! I am Tokker. Nice to meet you. What is your name?";
+    return "Hello! I'm Tokker. Let's practise English together. How are you today?";
   if (level === "B1" || level === "B2")
-    return "Hi there! I'm Tokker, your English practice partner. Tell me, what did you do today?";
-  return "Hello! I'm Tokker. So, what's been on your mind lately? I'd love to hear about it.";
+    return "Hi! I'm Tokker. Let's just chat in English and see where it goes. What's been on your mind recently?";
+  return "Hello — I'm Tokker. Let's talk; you lead the way. What would you like to talk about today?";
 }
 
 export function timestampNow() {

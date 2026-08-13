@@ -15,12 +15,14 @@ export function useTokkerSession(config) {
   const [active, setActive] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [issues, setIssues] = useState([]);
 
   const supported =
     !!SpeechRecognition && typeof window !== "undefined" && "speechSynthesis" in window;
 
   const recognitionRef = useRef(null);
   const historyRef = useRef([]);
+  const issuesRef = useRef({});
   const speakingRef = useRef(false);
   const processingRef = useRef(false);
   const activeRef = useRef(false);
@@ -44,16 +46,22 @@ export function useTokkerSession(config) {
 
   const buildSystemPrompt = useCallback(() => {
     const c = configRef.current;
-    const grammar = c?.grammarPoints?.length
-      ? c.grammarPoints.join(", ")
-      : "general fluency";
-    return `You are Tokker, a friendly English conversation partner for a Spanish-speaking learner.
-- Learner CEFR level: ${c.cefrLevel}. Speak primarily in English at that level — natural, never above it.
-- Keep turns short: 1 to 3 sentences. Practice balanced turn-taking: respond, ask ONE question, then yield. Never monologue or list exercises.
-- Target accent: ${c.accent} English. Use natural vocabulary and idioms for that variety.
-- When the learner makes a "Spanglish" mistake, a grammar error, or an unnatural phrase, briefly switch to Spanish to gently correct it and explain the underlying logic in one or two sentences, then immediately prompt them to continue in English.
-- Grammar focus for this session: ${grammar}.
-- Be warm, encouraging and patient. Do not use markdown. Reply only with what you would say out loud.`;
+    return `You are Tokker, an expert bilingual language coach specialising in Spanish↔English learning — including Spanglish interference across pronunciation, lexis, syntax and structures — and an expert in all types of English exam preparation (Cambridge, IELTS, TOEFL, EOI, school and university English, aptitude tests, etc.).
+
+TEACHING APPROACH — Dogme ELT:
+- Dogme is conversation-driven and materials-light. Topics, vocabulary and language points EMERGE from the learner's own talk and life. Do NOT impose topics, syllabi, drills or grammar lists. Teach to the moment: follow the learner and notice language as it naturally arises.
+- Keep the flow conversational. Address language lightly when it comes up, then return to the dialogue.
+
+BEHAVIOUR:
+- Speak primarily in English at the learner's CEFR level (${c.cefrLevel}) — natural, never above it.
+- Target accent: ${c.accent} English, with natural idioms and pronunciation for that variety.
+- Keep turns short: 1 to 3 sentences. Balanced turn-taking: respond, ask ONE open question, then yield. Never monologue or list exercises.
+- When the learner makes a Spanglish mistake or an error of pronunciation/lexis/syntax/structure, briefly switch to Spanish to gently correct it, explain the underlying logic, then prompt them to continue in English.
+- For recurring (fossilised) errors, suggest an innovative, memorable strategy or mnemonic to help break the habit.
+- When goals or tests come up, give concise, practical, up-to-date exam-preparation advice.
+- Be warm, encouraging and patient. No markdown in your spoken reply. Reply only with what you would say out loud.
+
+You also keep a private machine-readable record of the errors you noticed in the student's LAST message, for tracking and a later takeaway. Classify each error as exactly one of: pronunciation, lexis, syntax, structure, spanglish. Give the original error, the corrected form, and a short mnemonic or tip when useful. If the last message had no errors, return an empty errors array.`;
   }, []);
 
   const pickVoice = useCallback(() => {
@@ -134,6 +142,28 @@ export function useTokkerSession(config) {
     } catch (_) {}
   }, []);
 
+  const recordErrors = useCallback((errors) => {
+    if (!errors || !errors.length) { setIssues(Object.values(issuesRef.current)); return; }
+    const acc = issuesRef.current;
+    errors.forEach((e) => {
+      if (!e || !e.error) return;
+      const key = `${e.type || "other"}::${e.error.trim().toLowerCase()}`;
+      if (acc[key]) {
+        acc[key].count += 1;
+        if (e.mnemonic) acc[key].mnemonic = e.mnemonic;
+      } else {
+        acc[key] = {
+          type: e.type || "other",
+          error: e.error,
+          correction: e.correction || "",
+          mnemonic: e.mnemonic || "",
+          count: 1,
+        };
+      }
+    });
+    setIssues(Object.values(acc));
+  }, []);
+
   const getAiReply = useCallback(
     async (userText) => {
       historyRef.current.push({ role: "user", content: userText });
@@ -146,15 +176,33 @@ export function useTokkerSession(config) {
         const prompt = `${buildSystemPrompt()}\n\nConversation so far:\n${convo}\n\nTokker:`;
         const res = await base44.integrations.Core.InvokeLLM({
           prompt,
+          add_context_from_internet: true,
+          model: "gemini_3_flash",
           response_json_schema: {
             type: "object",
-            properties: { reply: { type: "string" } },
-            required: ["reply"],
+            properties: {
+              reply: { type: "string" },
+              errors: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    type: { type: "string", enum: ["pronunciation", "lexis", "syntax", "structure", "spanglish"] },
+                    error: { type: "string" },
+                    correction: { type: "string" },
+                    mnemonic: { type: "string" },
+                  },
+                  required: ["type", "error", "correction"],
+                },
+              },
+            },
+            required: ["reply", "errors"],
           },
         });
         const reply = (res && res.reply) || "Sorry, could you say that again?";
         historyRef.current.push({ role: "assistant", content: reply });
         addMessage("Tokker", reply);
+        recordErrors(res && res.errors);
         await speak(reply);
       } catch (e) {
         setError("Could not reach Tokker. Please try again.");
@@ -163,7 +211,7 @@ export function useTokkerSession(config) {
         setBusy(false);
       }
     },
-    [buildSystemPrompt, speak, addMessage]
+    [buildSystemPrompt, speak, addMessage, recordErrors]
   );
 
   const handleFinal = useCallback(
@@ -220,6 +268,8 @@ export function useTokkerSession(config) {
     }
     setError(null);
     historyRef.current = [];
+    issuesRef.current = {};
+    setIssues([]);
     setMessages([]);
     activeRef.current = true;
     setActive(true);
@@ -261,6 +311,7 @@ export function useTokkerSession(config) {
     active,
     error,
     busy,
+    issues,
     supported,
     start,
     stop,

@@ -7,7 +7,6 @@ import {
   CEFR_LEVELS,
   CEFR_DESCRIPTIONS,
   SPEED_OPTIONS,
-  GRAMMAR_POINTS,
 } from "@/lib/tokkerConfig";
 import {
   Card,
@@ -25,8 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { AudioLines, Check, Mic } from "lucide-react";
+import { AudioLines, Mic } from "lucide-react";
 
 export default function Setup() {
   const { setConfig } = useTokkerConfig();
@@ -36,12 +34,6 @@ export default function Setup() {
   const [gender, setGender] = useState("Female");
   const [speed, setSpeed] = useState(1.0);
   const [cefr, setCefr] = useState("B1");
-  const [grammar, setGrammar] = useState([]);
-
-  const toggleGrammar = (g) =>
-    setGrammar((prev) =>
-      prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]
-    );
 
   const start = () => {
     setConfig({
@@ -49,7 +41,6 @@ export default function Setup() {
       gender,
       speechSpeed: speed,
       cefrLevel: cefr,
-      grammarPoints: grammar,
     });
     navigate("/conversation");
   };
@@ -77,7 +68,8 @@ export default function Setup() {
               Set up your session
             </CardTitle>
             <CardDescription>
-              Choose how Tokker should sound and what to focus on.
+              Choose how Tokker should sound. Topics and lessons will emerge
+            naturally from your conversation.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-7">
@@ -144,49 +136,6 @@ export default function Setup() {
                   </SelectContent>
                 </Select>
               </Field>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium text-slate-700">
-                Grammar focus
-              </Label>
-              <p className="text-xs text-slate-500 mb-3">
-                Tap to select the points you want Tokker to watch for. Leave empty
-                for general fluency.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {GRAMMAR_POINTS.map((g) => {
-                  const on = grammar.includes(g);
-                  return (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => toggleGrammar(g)}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                        on
-                          ? "border-sky-400 bg-sky-50 text-sky-700"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                      }`}
-                    >
-                      {on && <Check className="w-3.5 h-3.5" />}
-                      {g}
-                    </button>
-                  );
-                })}
-              </div>
-              {grammar.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {grammar.map((g) => (
-                    <Badge
-                      key={g}
-                      variant="secondary"
-                      className="bg-sky-100 text-sky-700 font-normal"
-                    >
-                      {g}
-                    </Badge>
-                  ))}
-                </div>
-              )}
             </div>
 
             <Button
