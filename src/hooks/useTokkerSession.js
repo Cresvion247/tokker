@@ -24,6 +24,8 @@ export function useTokkerSession(config) {
   const historyRef = useRef([]);
   const issuesRef = useRef({});
   const speakingRef = useRef(false);
+  const pendingRef = useRef("");
+  const turnTimerRef = useRef(null);
   const processingRef = useRef(false);
   const activeRef = useRef(false);
   const configRef = useRef(config);
@@ -256,18 +258,36 @@ You also keep a private machine-readable record of the errors you noticed in the
     rec.continuous = true;
     rec.interimResults = true;
     rec.onresult = (e) => {
-      let finalText = "";
-      let interimText = "";
+      // Any new speech cancels the turn-end timer — the student may still be talking.
+      if (turnTimerRef.current) {
+        clearTimeout(turnTimerRef.current);
+        turnTimerRef.current = null;
+      }
+      let finalChunk = "";
+      let interimChunk = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
-        if (r.isFinal) finalText += r[0].transcript;
-        else interimText += r[0].transcript;
+        if (r.isFinal) finalChunk += r[0].transcript;
+        else interimChunk += r[0].transcript;
       }
-      if (interimText) setInterim(interimText);
-      if (finalText.trim()) {
+      if (finalChunk.trim()) {
+        pendingRef.current = (pendingRef.current + " " + finalChunk).trim();
+      }
+      setInterim((pendingRef.current + " " + interimChunk).trim());
+
+      // Decide how patiently to wait before assuming the turn is over.
+      const words = pendingRef.current.split(/\s+/).filter(Boolean);
+      const last = words[words.length - 1]?.toLowerCase() || "";
+      const connectors = ["and", "but", "because", "so", "then", "like", "or", "when", "while", "if", "actually", "well", "uh", "um", "i", "the", "a", "to", "of", "in", "that"];
+      let threshold = words.length < 6 ? 3600 : 2300; // short fragments tend to be mid-thought
+      if (connectors.includes(last)) threshold += 1600; // trailing connector likely continues the idea
+      turnTimerRef.current = setTimeout(() => {
+        turnTimerRef.current = null;
+        const text = pendingRef.current.trim();
+        pendingRef.current = "";
         setInterim("");
-        handleFinal(finalText.trim());
-      }
+        if (text) handleFinal(text);
+      }, threshold);
     };
     rec.onend = () => {
       if (activeRef.current && !speakingRef.current && !processingRef.current) {
@@ -293,6 +313,11 @@ You also keep a private machine-readable record of the errors you noticed in the
     issuesRef.current = {};
     setIssues([]);
     setMessages([]);
+    pendingRef.current = "";
+    if (turnTimerRef.current) {
+      clearTimeout(turnTimerRef.current);
+      turnTimerRef.current = null;
+    }
     activeRef.current = true;
     setActive(true);
     recognitionRef.current = initRecognition();
@@ -308,6 +333,11 @@ You also keep a private machine-readable record of the errors you noticed in the
     setActive(false);
     speakingRef.current = false;
     processingRef.current = false;
+    if (turnTimerRef.current) {
+      clearTimeout(turnTimerRef.current);
+      turnTimerRef.current = null;
+    }
+    pendingRef.current = "";
     if (typeof window !== "undefined" && window.speechSynthesis)
       window.speechSynthesis.cancel();
     stopRecognition();
@@ -319,6 +349,10 @@ You also keep a private machine-readable record of the errors you noticed in the
   useEffect(
     () => () => {
       activeRef.current = false;
+      if (turnTimerRef.current) {
+        clearTimeout(turnTimerRef.current);
+        turnTimerRef.current = null;
+      }
       if (typeof window !== "undefined" && window.speechSynthesis)
         window.speechSynthesis.cancel();
       stopRecognition();
