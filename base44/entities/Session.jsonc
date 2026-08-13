@@ -1,0 +1,72 @@
+{
+  "name": "Session",
+  "type": "object",
+  "properties": {
+    "cefr_level": {
+      "type": "string",
+      "enum": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2"
+      ],
+      "default": "B1"
+    },
+    "accent": {
+      "type": "string",
+      "enum": [
+        "US",
+        "UK",
+        "AUS"
+      ],
+      "default": "US"
+    },
+    "gender": {
+      "type": "string",
+      "enum": [
+        "Female",
+        "Male",
+        "Neutral"
+      ],
+      "default": "Female"
+    },
+    "speech_speed": {
+      "type": "number",
+      "default": 1.0
+    },
+    "grammar_points": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "turns": {
+      "type": "number",
+      "default": 0
+    },
+    "transcript": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "speaker": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        }
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "cefr_level"
+  ]
+}
