@@ -37,6 +37,17 @@ function cleanSpoken(text) {
   return text.replace(/⟨\/?(en|es)⟩/g, "").replace(/\s+/g, " ").trim();
 }
 
+// Light Spanish detection so the learner's Spanish turns are tagged before
+// reaching Tokker. This nudges the model to reply in Spanish (with ⟨es⟩ tags)
+// so the speech engine uses the Spanish voice instead of the English one.
+function isLikelySpanish(text) {
+  if (!text) return false;
+  if (/[¿¡ÁÉÍÓÚÜÑáéíóúñ]/.test(text)) return true;
+  const markers =
+    /\b(qué|cómo|más|para|una|los|las|con|por|pero|retos|técnicos|chatbot|cuentas|cambiamos|tema|dime|cuéntame)\b/gi;
+  return (text.match(markers) || []).length >= 2;
+}
+
 export function useTokkerSession(config) {
   const [messages, setMessages] = useState([]);
   const [vadState, setVadState] = useState("idle");
@@ -334,7 +345,8 @@ You also keep a private machine-readable record of the errors you noticed in the
       processingRef.current = true;
       addMessage("Student", text);
       stopRecognition();
-      await getAiReply(text);
+      const tagged = isLikelySpanish(text) ? `⟨es⟩${text}⟨/es⟩` : text;
+      await getAiReply(tagged);
       processingRef.current = false;
       if (activeRef.current) startRecognition();
     },
