@@ -34,6 +34,13 @@ export function useTokkerSession(config) {
     configRef.current = config;
   }, [config]);
 
+  // Keep speech recognition's language in sync when the accent changes mid-session.
+  useEffect(() => {
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = LANG_MAP[config.accent];
+    }
+  }, [config.accent]);
+
   // Warm up the voice list (Chrome loads voices async).
   useEffect(() => {
     if (typeof window !== "undefined" && window.speechSynthesis) {

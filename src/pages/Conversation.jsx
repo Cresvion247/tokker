@@ -8,6 +8,7 @@ import TranscriptPanel from "@/components/tokker/TranscriptPanel";
 import TakeawayPanel from "@/components/tokker/TakeawayPanel";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
+import { Sliders } from "lucide-react";
 import {
   AudioLines,
   Download,
@@ -16,6 +17,7 @@ import {
   Settings,
   Loader2,
 } from "lucide-react";
+import VoiceControls from "@/components/tokker/VoiceControls";
 
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -29,10 +31,11 @@ function triggerDownload(blob, filename) {
 }
 
 export default function Conversation() {
-  const { config } = useTokkerConfig();
+  const { config, setConfig } = useTokkerConfig();
   const navigate = useNavigate();
   const session = useTokkerSession(config);
   const [downloading, setDownloading] = useState(false);
+  const [showVoice, setShowVoice] = useState(false);
 
   useEffect(() => {
     if (!config) navigate("/");
@@ -177,15 +180,34 @@ ${lines}`;
               </div>
             </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={endSession}
-            className="rounded-lg border-slate-200 text-slate-600"
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            New setup
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowVoice((s) => !s)}
+              className="rounded-lg border-slate-200 text-slate-600"
+            >
+              <Sliders className="w-4 h-4 mr-2" />
+              Voice
+            </Button>
+            <Button
+              variant="outline"
+              onClick={endSession}
+              className="rounded-lg border-slate-200 text-slate-600"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              New setup
+            </Button>
+          </div>
         </header>
+
+        {showVoice && (
+          <div className="mb-5">
+            <VoiceControls
+              config={config}
+              onChange={(patch) => setConfig({ ...config, ...patch })}
+            />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           {/* Conversation stage */}
