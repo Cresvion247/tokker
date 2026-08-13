@@ -112,6 +112,10 @@ You also keep a private machine-readable record of the errors you noticed in the
           resolve();
           return;
         }
+        if (!activeRef.current) {
+          resolve();
+          return;
+        }
         const chunks =
           text
             .match(/[^.!?…]+[.!?…]*\s*/g)
@@ -232,6 +236,7 @@ You also keep a private machine-readable record of the errors you noticed in the
           },
         });
         const reply = (res && res.reply) || "Sorry, could you say that again?";
+        if (!activeRef.current) return;
         historyRef.current.push({ role: "assistant", content: reply });
         addMessage("Tokker", reply);
         recordErrors(res && res.errors);
@@ -248,6 +253,7 @@ You also keep a private machine-readable record of the errors you noticed in the
 
   const handleFinal = useCallback(
     async (text) => {
+      if (!activeRef.current) return;
       if (speakingRef.current || processingRef.current) return;
       processingRef.current = true;
       addMessage("Student", text);
@@ -291,6 +297,11 @@ You also keep a private machine-readable record of the errors you noticed in the
       if (connectors.includes(last)) threshold += 1600; // trailing connector likely continues the idea
       turnTimerRef.current = setTimeout(() => {
         turnTimerRef.current = null;
+        if (!activeRef.current) {
+          pendingRef.current = "";
+          setInterim("");
+          return;
+        }
         const text = pendingRef.current.trim();
         pendingRef.current = "";
         setInterim("");
