@@ -66,31 +66,39 @@ You also keep a private machine-readable record of the errors you noticed in the
 
   const pickVoice = useCallback(() => {
     const c = configRef.current;
-    if (!window.speechSynthesis) return null;
+    if (typeof window === "undefined" || !window.speechSynthesis) return null;
     const voices = window.speechSynthesis.getVoices();
     if (!voices.length) return null;
     const target = LANG_MAP[c.accent];
+
+    const naturalScore = (v) => {
+      const n = v.name.toLowerCase();
+      let score = 0;
+      if (n.includes("natural")) score += 5;
+      if (n.includes("premium") || n.includes("enhanced")) score += 4;
+      if (n.includes("google")) score += 3;
+      if (/(samantha|karen|serena|daniel|rishi|aria|jenny)/.test(n)) score += 2;
+      return score;
+    };
+
     let candidates = voices.filter(
       (v) => v.lang === target || v.lang?.startsWith(target)
     );
+
     if (c.gender !== "Neutral") {
-      const femaleHints = [
-        "female", "samantha", "karen", "catherine", "moira", "tessa",
-        "fiona", "serena", "zira", "google uk english female", "google us english female", "susan",
-      ];
-      const maleHints = [
-        "male", "daniel", "alex", "fred", "tom", "arthur",
-        "oliver", "rishi", "google uk english male", "google us english male", "aaron",
-      ];
+      const femaleHints = ["female", "samantha", "karen", "catherine", "moira", "tessa", "fiona", "serena", "zira", "susan", "aria", "jenny"];
+      const maleHints = ["male", "daniel", "alex", "fred", "tom", "arthur", "oliver", "rishi", "aaron", "guy", "ryan"];
       const hints = c.gender === "Female" ? femaleHints : maleHints;
-      const match = candidates.find((v) =>
+      const gendered = candidates.filter((v) =>
         hints.some((h) => v.name.toLowerCase().includes(h))
       );
-      if (match) candidates = [match];
+      if (gendered.length) candidates = gendered;
     }
-    return (
-      candidates[0] || voices.find((v) => v.lang?.startsWith("en")) || voices[0]
-    );
+
+    const ranked = candidates
+      .slice()
+      .sort((a, b) => naturalScore(b) - naturalScore(a));
+    return ranked[0] || voices.find((v) => v.lang?.startsWith("en")) || voices[0];
   }, []);
 
   const speak = useCallback(
@@ -100,24 +108,40 @@ You also keep a private machine-readable record of the errors you noticed in the
           resolve();
           return;
         }
-        const u = new SpeechSynthesisUtterance(text);
+        const chunks =
+          text
+            .match(/[^.!?…]+[.!?…]*\s*/g)
+            ?.map((s) => s.trim())
+            .filter(Boolean) || [text];
+        if (!chunks.length) {
+          resolve();
+          return;
+        }
         const v = pickVoice();
-        if (v) u.voice = v;
         const c = configRef.current;
-        u.lang = LANG_MAP[c.accent];
-        u.rate = c.speechSpeed;
-        u.onend = () => {
-          speakingRef.current = false;
-          resolve();
-        };
-        u.onerror = () => {
-          speakingRef.current = false;
-          resolve();
-        };
+        const lang = LANG_MAP[c.accent];
+        const rate = c.speechSpeed;
+        window.speechSynthesis.cancel();
         speakingRef.current = true;
         setVadState("speaking");
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(u);
+        let remaining = chunks.length;
+        const onFinish = () => {
+          remaining -= 1;
+          if (remaining === 0) {
+            speakingRef.current = false;
+            resolve();
+          }
+        };
+        chunks.forEach((chunk) => {
+          const u = new SpeechSynthesisUtterance(chunk);
+          if (v) u.voice = v;
+          u.lang = lang;
+          u.rate = rate;
+          u.pitch = 1.0;
+          u.onend = onFinish;
+          u.onerror = onFinish;
+          window.speechSynthesis.speak(u);
+        });
       });
     },
     [pickVoice]
@@ -176,8 +200,6 @@ You also keep a private machine-readable record of the errors you noticed in the
         const prompt = `${buildSystemPrompt()}\n\nConversation so far:\n${convo}\n\nTokker:`;
         const res = await base44.integrations.Core.InvokeLLM({
           prompt,
-          add_context_from_internet: true,
-          model: "gemini_3_flash",
           response_json_schema: {
             type: "object",
             properties: {
