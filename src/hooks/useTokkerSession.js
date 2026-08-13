@@ -345,7 +345,9 @@ You also keep a private machine-readable record of the errors you noticed in the
       processingRef.current = true;
       addMessage("Student", text);
       stopRecognition();
-      const tagged = isLikelySpanish(text) ? `⟨es⟩${text}⟨/es⟩` : text;
+      const tagged = isLikelySpanish(text)
+        ? `⟨es⟩${text}⟨/es⟩`
+        : `⟨en⟩${text}⟨/en⟩`;
       await getAiReply(tagged);
       processingRef.current = false;
       if (activeRef.current) startRecognition();
