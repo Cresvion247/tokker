@@ -8,6 +8,21 @@ const SpeechRecognition =
 
 const LANG_MAP = { US: "en-US", UK: "en-GB", AUS: "en-AU" };
 
+const SPANISH_SIGNALS = [
+  "digas", "dilo", "suena", "así", "recuerda", "atención", "escucha",
+  "significa", "fíjate", "ejemplo", "español", "decir", "pronuncia",
+  "pronunciación", "sonido", "letra", "palabra", "es decir", "o sea",
+  "se dice", "no se dice", "cómo no", "cómo sí", "mejor dicho", "vamos a",
+];
+
+function isSpanishChunk(text) {
+  const t = text.toLowerCase();
+  let score = 0;
+  if (/[áéíóúüñ¿¡]/.test(t)) score += 3;
+  for (const s of SPANISH_SIGNALS) if (t.includes(s)) score += 2;
+  return score >= 2;
+}
+
 export function useTokkerSession(config) {
   const [messages, setMessages] = useState([]);
   const [vadState, setVadState] = useState("idle");
@@ -112,6 +127,35 @@ You also keep a private machine-readable record of the errors you noticed in the
     return ranked[0] || voices.find((v) => v.lang?.startsWith("en")) || voices[0];
   }, []);
 
+  const pickSpanishVoice = useCallback(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return null;
+    let candidates = voices.filter((v) => v.lang?.toLowerCase().startsWith("es"));
+    if (!candidates.length) candidates = voices.slice();
+    if (configRef.current.gender !== "Neutral") {
+      const femaleHints = ["female", "mónica", "monica", "paulina", "helena", "laura", "marisol", "sabina", "elena", "lucia"];
+      const maleHints = ["male", "diego", "jorge", "carlos", "emilio", "enrique", "juan", "miguel"];
+      const hints = configRef.current.gender === "Female" ? femaleHints : maleHints;
+      const gendered = candidates.filter((v) =>
+        hints.some((h) => v.name.toLowerCase().includes(h))
+      );
+      if (gendered.length) candidates = gendered;
+    }
+    const score = (v) => {
+      const n = v.name.toLowerCase();
+      const l = (v.lang || "").toLowerCase();
+      let s = 0;
+      if (l === "es-es" || l === "es_es") s += 2;
+      if (n.includes("natural")) s += 5;
+      if (n.includes("premium") || n.includes("enhanced")) s += 4;
+      if (n.includes("google")) s += 3;
+      return s;
+    };
+    const ranked = candidates.slice().sort((a, b) => score(b) - score(a));
+    return ranked[0] || null;
+  }, []);
+
   const speak = useCallback(
     (text) => {
       return new Promise((resolve) => {
@@ -132,9 +176,7 @@ You also keep a private machine-readable record of the errors you noticed in the
           resolve();
           return;
         }
-        const v = pickVoice();
         const c = configRef.current;
-        const lang = LANG_MAP[c.accent];
         const rate = c.speechSpeed;
         window.speechSynthesis.cancel();
         speakingRef.current = true;
@@ -148,6 +190,9 @@ You also keep a private machine-readable record of the errors you noticed in the
           }
         };
         chunks.forEach((chunk) => {
+          const useSpanish = isSpanishChunk(chunk);
+          const v = useSpanish ? pickSpanishVoice() : pickVoice();
+          const lang = useSpanish ? "es-ES" : LANG_MAP[c.accent];
           const u = new SpeechSynthesisUtterance(chunk);
           if (v) u.voice = v;
           u.lang = lang;
@@ -159,7 +204,7 @@ You also keep a private machine-readable record of the errors you noticed in the
         });
       });
     },
-    [pickVoice]
+    [pickVoice, pickSpanishVoice]
   );
 
   const startRecognition = useCallback(() => {
