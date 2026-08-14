@@ -226,8 +226,11 @@ You also keep a private machine-readable record of the errors you noticed in the
             return;
           }
           const u = utterances[idx++];
-          u.onend = speakNext;
-          u.onerror = speakNext;
+          // A new utterance starting inside the previous one's onend can inherit
+          // the old voice in Chrome. A short tick lets the engine reset so each
+          // segment truly uses its own voice/language.
+          u.onend = () => setTimeout(speakNext, 30);
+          u.onerror = () => setTimeout(speakNext, 30);
           window.speechSynthesis.speak(u);
         };
         speakNext();
