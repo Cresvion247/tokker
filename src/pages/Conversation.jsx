@@ -284,23 +284,27 @@ ${lines}`;
             </div>
           </div>
 
-          {/* Transcript */}
-          <div className="lg:col-span-3 rounded-2xl border border-slate-200 bg-white p-5 flex flex-col h-[480px] lg:h-auto lg:min-h-[480px]">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-slate-700">
-                Live transcript
-              </h2>
-              <span className="text-xs text-slate-400">
-                {messages.length} turn{messages.length === 1 ? "" : "s"}
-              </span>
+          {/* Transcript + live mistakes */}
+          <div className="lg:col-span-3 flex flex-col gap-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-col h-[420px] lg:h-[480px]">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-slate-700">
+                  Live transcript
+                </h2>
+                <span className="text-xs text-slate-400">
+                  {messages.length} turn{messages.length === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div className="flex-1 min-h-0">
+                <TranscriptPanel messages={messages} interim={interim} />
+              </div>
             </div>
-            <div className="flex-1 min-h-0">
-              <TranscriptPanel messages={messages} interim={interim} />
-            </div>
+
+            {issues.length > 0 && <TakeawayPanel issues={issues} />}
           </div>
         </div>
 
-        {!active && messages.length > 0 && (
+        {!active && messages.length > 0 && issues.length === 0 && (
           <div className="mt-5">
             <TakeawayPanel issues={issues} />
           </div>

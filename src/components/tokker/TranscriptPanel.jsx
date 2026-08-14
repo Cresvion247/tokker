@@ -1,15 +1,19 @@
 import { useEffect, useRef } from "react";
 
 export default function TranscriptPanel({ messages, interim }) {
-  const endRef = useRef(null);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages, interim]);
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto space-y-3 pr-1 pb-2">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto space-y-3 pr-1 pb-2"
+      >
         {messages.length === 0 && (
           <p className="text-sm text-slate-400 text-center py-10">
             Your conversation will appear here.
@@ -49,7 +53,7 @@ export default function TranscriptPanel({ messages, interim }) {
             </div>
           </div>
         )}
-        <div ref={endRef} />
+        <div />
       </div>
     </div>
   );

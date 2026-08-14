@@ -30,7 +30,7 @@ export default function Setup() {
   const { setConfig } = useTokkerConfig();
   const navigate = useNavigate();
 
-  const [accent, setAccent] = useState("US");
+  const [accent, setAccent] = useState("UK");
   const [gender, setGender] = useState("Female");
   const [speed, setSpeed] = useState(1.0);
   const [cefr, setCefr] = useState("B1");
