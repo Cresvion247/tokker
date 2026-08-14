@@ -212,19 +212,25 @@ You also keep a private machine-readable record of the errors you noticed in the
         window.speechSynthesis.cancel();
         speakingRef.current = true;
         setVadState("speaking");
-        let remaining = utterances.length;
-        const onFinish = () => {
-          remaining -= 1;
-          if (remaining === 0) {
+
+        let idx = 0;
+        const speakNext = () => {
+          if (!activeRef.current) {
             speakingRef.current = false;
             resolve();
+            return;
           }
-        };
-        utterances.forEach((u) => {
-          u.onend = onFinish;
-          u.onerror = onFinish;
+          if (idx >= utterances.length) {
+            speakingRef.current = false;
+            resolve();
+            return;
+          }
+          const u = utterances[idx++];
+          u.onend = speakNext;
+          u.onerror = speakNext;
           window.speechSynthesis.speak(u);
-        });
+        };
+        speakNext();
       });
     },
     [pickVoice, pickSpanishVoice]
