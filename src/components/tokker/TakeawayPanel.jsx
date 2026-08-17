@@ -85,9 +85,17 @@ function MistakeCard({ issue, spotlight }) {
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm text-slate-800 flex-1">
-          <span className="text-slate-400 line-through">{issue.error}</span>
-          <span className="text-slate-400"> → </span>
-          <span className="font-medium text-slate-900">{issue.correction}</span>
+          {issue.type === "pronunciation" ? (
+            <>
+              <span className="font-medium text-slate-900">{issue.correction}</span>
+            </>
+          ) : (
+            <>
+              <span className="text-slate-400 line-through">{issue.error}</span>
+              <span className="text-slate-400"> → </span>
+              <span className="font-medium text-slate-900">{issue.correction}</span>
+            </>
+          )}
         </p>
         <ChevronDown
           className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
@@ -95,6 +103,28 @@ function MistakeCard({ issue, spotlight }) {
           }`}
         />
       </div>
+
+      {issue.type === "pronunciation" &&
+        (issue.wrongPronunciation || issue.correctPronunciation) && (
+          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+            {issue.wrongPronunciation && (
+              <div className="rounded-lg bg-rose-50 border border-rose-100 px-2.5 py-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-500 mb-0.5">
+                  Cómo NO
+                </p>
+                <p className="text-rose-700 font-medium">{issue.wrongPronunciation}</p>
+              </div>
+            )}
+            {issue.correctPronunciation && (
+              <div className="rounded-lg bg-emerald-50 border border-emerald-100 px-2.5 py-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600 mb-0.5">
+                  Cómo SÍ
+                </p>
+                <p className="text-emerald-700 font-medium">{issue.correctPronunciation}</p>
+              </div>
+            )}
+          </div>
+        )}
 
       <AnimatePresence initial={false}>
         {open && (
