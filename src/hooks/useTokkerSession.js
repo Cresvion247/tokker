@@ -44,14 +44,25 @@ function cleanSpoken(text) {
 // Canonical speech-ready cleaner: strip any symbol, bracket or quote that the
 // TTS engine would try to pronounce, before the text reaches SpeechSynthesis.
 // Periods/commas are kept (collapsing repeated ones) so the engine still hears
-// natural pauses. Any KEEP sentence-end punctuation like ! ? so prosody stays.
+// natural pauses. Apostrophes INSIDE words (let's, can't, I'm) are preserved so
+// contractions are pronounced correctly; only standalone/quote apostrophes are
+// removed. Sent-end punctuation like ! ? is kept so prosody stays.
 function getSpokenText(text) {
+  const APO = "\u2019"; // right single quote ’ — keeps doubling as apostrophe
   return text
     .replace(/⟨\/?(en|es)⟩/g, "")
-    .replace(/[«»“”‘’"'`{}\[\]()]/g, " ")
+    // Drop quotation marks and brackets, but keep the apostrophe (both ' and
+    // the curly ’). Unlike surrounding quotes, the apostrophe is load-bearing
+    // inside contractions — removing it makes "let's" glitch into "let s".
+    .replace(/[«»“”"`\[\]{}()]/g, " ")
+    // Standalone apostrophe/quote used as a quote around a phrase (e.g. 'word')
+    // would otherwise split into nothing — collapse to a space.
+    .replace(/(?<=\s)['’](?=\S)|(?<=\S)['’](?=\s|$)/g, " ")
+    // Normalize curly apostrophes to a plain one so all engines handle them.
+    .replace(/[’]/g, "'")
     .replace(/[–—\-:;·|/\\]/g, ",")
-    .replace(/\s*[,]\s*/g, ", ")
-    .replace(/[,]{2,}/g, ",")
+    .replace(/\s*,\s*/g, ", ")
+    .replace(/,{2,}/g, ",")
     .replace(/[.!?]{2,}/g, ".")
     .replace(/\s+/g, " ")
     .trim();
