@@ -37,6 +37,22 @@ function cleanSpoken(text) {
   return text.replace(/⟨\/?(en|es)⟩/g, "").replace(/\s+/g, " ").trim();
 }
 
+// Canonical speech-ready cleaner: strip any symbol, bracket or quote that the
+// TTS engine would try to pronounce, before the text reaches SpeechSynthesis.
+// Periods/commas are kept (collapsing repeated ones) so the engine still hears
+// natural pauses. Any KEEP sentence-end punctuation like ! ? so prosody stays.
+function getSpokenText(text) {
+  return text
+    .replace(/⟨\/?(en|es)⟩/g, "")
+    .replace(/[«»“”‘’"'`{}\[\]()]/g, " ")
+    .replace(/[–—\-:;·|/\\]/g, ",")
+    .replace(/\s*[,]\s*/g, ", ")
+    .replace(/[,]{2,}/g, ",")
+    .replace(/[.!?]{2,}/g, ".")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Chrome loads speechSynthesis voices asynchronously. If we speak before they
 // arrive, pickVoice() returns null and the engine falls back to the system
 // default — ignoring the chosen accent/gender. This waits for the list (or a
@@ -209,8 +225,10 @@ You also keep a private machine-readable record of the errors you noticed in the
         // English runs use the English accent and Spanish runs use a Spanish
         // voice — no single voice reads the whole bilingual reply.
         const v = seg.lang === "es" ? pickSpanishVoice() : pickVoice();
+        const spoken = getSpokenText(seg.text);
+        if (!spoken) return;
         const pieces =
-          seg.text
+          spoken
             .match(/[^.!?…]+[.!?…]*\s*/g)
             ?.map((s) => s.trim())
             .filter(Boolean) || [seg.text];
