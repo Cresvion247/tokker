@@ -269,8 +269,13 @@ You also keep a private machine-readable record of the errors you noticed in the
           const u = utterances[idx++];
           // A short tick between utterances lets Chrome's engine reset the
           // voice/language so consecutive segments don't inherit each other.
-          u.onend = () => setTimeout(speakNext, 30);
-          u.onerror = () => setTimeout(speakNext, 30);
+          // 50ms gives the engine a breath to flush the previous voice profile
+          // and load the next one, preventing overlap/choppiness on switching.
+          u.onend = () => setTimeout(speakNext, 50);
+          u.onerror = () => {
+            window.speechSynthesis.cancel();
+            setTimeout(speakNext, 50);
+          };
           window.speechSynthesis.speak(u);
         };
         speakNext();
