@@ -8,6 +8,10 @@ const SpeechRecognition =
 
 const LANG_MAP = { US: "en-US", UK: "en-GB", AUS: "en-AU" };
 
+// Monotonic counter gives each tracked issue a stable unique id — framer-motion
+// needs a stable key so cards animate (slide/sort) rather than jarringly reload.
+let ISSUE_ID_SEQ = 0;
+
 // The LLM labels Spanish runs with ⟨es⟩…⟨/es⟩ and English with ⟨en⟩…⟨/en⟩.
 // We split the reply on these tags so each piece is spoken with the matching
 // voice/language, instead of one voice mangling both languages.
@@ -318,11 +322,13 @@ You also keep a private machine-readable record of the errors you noticed in the
       const key = `${e.type || "other"}::${e.error.trim().toLowerCase()}`;
       if (acc[key]) {
         acc[key].count += 1;
+        acc[key].lastSeen = Date.now();
         if (e.mnemonic) acc[key].mnemonic = e.mnemonic;
         if (e.wrongPronunciation) acc[key].wrongPronunciation = e.wrongPronunciation;
         if (e.correctPronunciation) acc[key].correctPronunciation = e.correctPronunciation;
       } else {
         acc[key] = {
+          id: `issue_${ISSUE_ID_SEQ++}`,
           type: e.type || "other",
           error: e.error,
           correction: e.correction || "",
@@ -330,6 +336,7 @@ You also keep a private machine-readable record of the errors you noticed in the
           wrongPronunciation: e.wrongPronunciation || "",
           correctPronunciation: e.correctPronunciation || "",
           count: 1,
+          lastSeen: Date.now(),
         };
       }
     });
