@@ -211,7 +211,7 @@ ${lines}`;
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           {/* Conversation stage */}
-          <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50/50 p-6 flex flex-col items-center justify-between min-h-[480px]">
+          <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50/50 p-5 sm:p-6 flex flex-col items-center justify-between min-h-[400px] lg:min-h-[480px]">
             <div className="flex-1 flex flex-col items-center justify-center w-full">
               <TalkingAvatar vadState={vadState} />
               <div className="mt-6">
@@ -286,7 +286,7 @@ ${lines}`;
 
           {/* Transcript + live mistakes */}
           <div className="lg:col-span-3 flex flex-col gap-5">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 flex flex-col h-[420px] lg:h-[480px]">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 flex flex-col h-[360px] sm:h-[420px] lg:h-[480px] min-h-[300px]">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-semibold text-slate-700">
                   Live transcript

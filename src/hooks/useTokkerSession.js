@@ -37,6 +37,27 @@ function cleanSpoken(text) {
   return text.replace(/⟨\/?(en|es)⟩/g, "").replace(/\s+/g, " ").trim();
 }
 
+// Chrome loads speechSynthesis voices asynchronously. If we speak before they
+// arrive, pickVoice() returns null and the engine falls back to the system
+// default — ignoring the chosen accent/gender. This waits for the list (or a
+// short timeout) so the first utterance uses the correct voice.
+function getVoicesReady(maxWaitMs = 1500) {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return resolve([]);
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length) return resolve(voices);
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.speechSynthesis.onvoiceschanged = null;
+      resolve(window.speechSynthesis.getVoices() || []);
+    };
+    window.speechSynthesis.onvoiceschanged = finish;
+    setTimeout(finish, maxWaitMs);
+  });
+}
+
 export function useTokkerSession(config) {
   const [messages, setMessages] = useState([]);
   const [vadState, setVadState] = useState("idle");
@@ -62,13 +83,6 @@ export function useTokkerSession(config) {
   useEffect(() => {
     configRef.current = config;
   }, [config]);
-
-  // Keep speech recognition's language in sync when the accent changes mid-session.
-  useEffect(() => {
-    if (recognitionRef.current && config) {
-      recognitionRef.current.lang = LANG_MAP[config.accent];
-    }
-  }, [config?.accent]);
 
   // Warm up the voice list (Chrome loads voices async).
   useEffect(() => {
@@ -140,15 +154,20 @@ You also keep a private machine-readable record of the errors you noticed in the
     const ranked = candidates
       .slice()
       .sort((a, b) => naturalScore(b) - naturalScore(a));
-    return ranked[0] || voices.find((v) => v.lang?.startsWith("en")) || voices[0];
+    // Only return a voice that actually speaks the target English accent.
+    // Falling back to an arbitrary voice would let an English segment be read
+    // with the wrong accent (or a Spanish segment read in English).
+    return ranked[0] || null;
   }, []);
 
   const pickSpanishVoice = useCallback(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return null;
     const voices = window.speechSynthesis.getVoices();
     if (!voices.length) return null;
+    // Only ever return a Spanish-language voice. If none is installed we return
+    // null and rely on u.lang = "es-ES" so the browser still attempts Spanish
+    // pronunciation rather than reading Spanish with an English voice.
     let candidates = voices.filter((v) => v.lang?.toLowerCase().startsWith("es"));
-    if (!candidates.length) candidates = voices.slice();
     if (configRef.current.gender !== "Neutral") {
       const femaleHints = ["female", "mónica", "monica", "paulina", "helena", "laura", "marisol", "sabina", "elena", "lucia"];
       const maleHints = ["male", "diego", "jorge", "carlos", "emilio", "enrique", "juan", "miguel"];
@@ -173,46 +192,46 @@ You also keep a private machine-readable record of the errors you noticed in the
   }, []);
 
   const speak = useCallback(
-    (text) => {
-      return new Promise((resolve) => {
-        if (typeof window === "undefined" || !window.speechSynthesis) {
-          resolve();
-          return;
-        }
-        if (!activeRef.current) {
-          resolve();
-          return;
-        }
-        const c = configRef.current;
-        const rate = c.speechSpeed;
-        const segments = parseSegments(text);
-        const utterances = [];
-        segments.forEach((seg) => {
-          const segLang = seg.lang === "es" ? "es-ES" : LANG_MAP[c.accent];
-          const v = seg.lang === "es" ? pickSpanishVoice() : pickVoice();
-          const pieces =
-            seg.text
-              .match(/[^.!?…]+[.!?…]*\s*/g)
-              ?.map((s) => s.trim())
-              .filter(Boolean) || [seg.text];
-          pieces.forEach((p) => {
-            if (!p) return;
-            const u = new SpeechSynthesisUtterance(p);
-            if (v) u.voice = v;
-            u.lang = segLang;
-            u.rate = rate;
-            u.pitch = 1.0;
-            utterances.push(u);
-          });
+    async (text) => {
+      if (typeof window === "undefined" || !window.speechSynthesis) return;
+      if (!activeRef.current) return;
+      // Wait for the voice list so the chosen accent/gender is applied to the
+      // very first utterance, not just the ones after voices load.
+      await getVoicesReady();
+      if (!activeRef.current) return;
+      const c = configRef.current;
+      const rate = c.speechSpeed;
+      const segments = parseSegments(text);
+      const utterances = [];
+      segments.forEach((seg) => {
+        const segLang = seg.lang === "es" ? "es-ES" : LANG_MAP[c.accent];
+        // Route each chunk to a voice that actually speaks its language, so
+        // English runs use the English accent and Spanish runs use a Spanish
+        // voice — no single voice reads the whole bilingual reply.
+        const v = seg.lang === "es" ? pickSpanishVoice() : pickVoice();
+        const pieces =
+          seg.text
+            .match(/[^.!?…]+[.!?…]*\s*/g)
+            ?.map((s) => s.trim())
+            .filter(Boolean) || [seg.text];
+        pieces.forEach((p) => {
+          if (!p) return;
+          const u = new SpeechSynthesisUtterance(p);
+          // Set lang first; voice is authoritative when available, lang still
+          // guides pronunciation when no matching voice is installed.
+          u.lang = segLang;
+          if (v) u.voice = v;
+          u.rate = rate;
+          u.pitch = 1.0;
+          utterances.push(u);
         });
-        if (!utterances.length) {
-          resolve();
-          return;
-        }
-        window.speechSynthesis.cancel();
-        speakingRef.current = true;
-        setVadState("speaking");
+      });
+      if (!utterances.length) return;
+      window.speechSynthesis.cancel();
+      speakingRef.current = true;
+      setVadState("speaking");
 
+      return new Promise((resolve) => {
         let idx = 0;
         const speakNext = () => {
           if (!activeRef.current) {
@@ -226,9 +245,8 @@ You also keep a private machine-readable record of the errors you noticed in the
             return;
           }
           const u = utterances[idx++];
-          // A new utterance starting inside the previous one's onend can inherit
-          // the old voice in Chrome. A short tick lets the engine reset so each
-          // segment truly uses its own voice/language.
+          // A short tick between utterances lets Chrome's engine reset the
+          // voice/language so consecutive segments don't inherit each other.
           u.onend = () => setTimeout(speakNext, 30);
           u.onerror = () => setTimeout(speakNext, 30);
           window.speechSynthesis.speak(u);
@@ -238,6 +256,22 @@ You also keep a private machine-readable record of the errors you noticed in the
     },
     [pickVoice, pickSpanishVoice]
   );
+
+  // When voice settings change mid-session, update the recognizer language and
+  // cancel any in-flight speech so the next utterance uses the new profile.
+  useEffect(() => {
+    if (recognitionRef.current && config) {
+      recognitionRef.current.lang = LANG_MAP[config.accent];
+    }
+    if (
+      activeRef.current &&
+      speakingRef.current &&
+      typeof window !== "undefined" &&
+      window.speechSynthesis
+    ) {
+      window.speechSynthesis.cancel();
+    }
+  }, [config?.accent, config?.gender]);
 
   const startRecognition = useCallback(() => {
     const rec = recognitionRef.current;
