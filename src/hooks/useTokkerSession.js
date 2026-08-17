@@ -61,7 +61,7 @@ function getSpokenText(text) {
 // arrive, pickVoice() returns null and the engine falls back to the system
 // default — ignoring the chosen accent/gender. This waits for the list (or a
 // short timeout) so the first utterance uses the correct voice.
-function getVoicesReady(maxWaitMs = 1500) {
+function getVoicesReady(maxWaitMs = 2500) {
   return new Promise((resolve) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return resolve([]);
     const voices = window.speechSynthesis.getVoices();
@@ -75,6 +75,31 @@ function getVoicesReady(maxWaitMs = 1500) {
     };
     window.speechSynthesis.onvoiceschanged = finish;
     setTimeout(finish, maxWaitMs);
+  });
+}
+
+// Chrome's speech engine often ignores the assigned voice on the very first
+// utterance of a page session (a well-known bug), so the first English line
+// comes out in the system default voice — wrong accent, or even Spanish.
+// Pre-speaking a tiny silent utterance once "warms up" the engine and binds the
+// chosen voice profile before the real reply plays.
+let PRIMED = false;
+function primeEngine(voice, lang, rate) {
+  return new Promise((resolve) => {
+    if (PRIMED || typeof window === "undefined" || !window.speechSynthesis) {
+      PRIMED = true;
+      return resolve();
+    }
+    const warm = new SpeechSynthesisUtterance(" ");
+    warm.voice = voice;
+    warm.lang = lang;
+    warm.rate = rate;
+    warm.volume = 0;
+    warm.onend = () => { PRIMED = true; resolve(); };
+    warm.onerror = () => { PRIMED = true; resolve(); };
+    window.speechSynthesis.speak(warm);
+    // Safety: never block more than 400ms waiting on the warm-up.
+    setTimeout(() => { PRIMED = true; resolve(); }, 400);
   });
 }
 
@@ -250,6 +275,10 @@ You also keep a private machine-readable record of the errors you noticed in the
       });
       if (!utterances.length) return;
       window.speechSynthesis.cancel();
+      // Prime the engine once so the first real utterance respects its voice.
+      const first = utterances[0];
+      await primeEngine(first.voice, first.lang, first.voice ? rate : rate);
+      if (!activeRef.current) return;
       speakingRef.current = true;
       setVadState("speaking");
 
